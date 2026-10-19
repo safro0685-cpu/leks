@@ -5,6 +5,7 @@ import EffectsLayer, { type Bubble, type Flight, type Particle } from './compone
 import BoneInventory from './components/BoneInventory';
 import MoodBar from './components/MoodBar';
 import SocialLinks from './components/SocialLinks';
+import { bark } from './bark';
 import { EAT_PHRASES, LEX_POINTS, PET_PHRASES, REFILL_BONES, START_BONES } from './config';
 
 const PET_COOLDOWN = 450;
@@ -97,6 +98,7 @@ export default function App() {
       burst(x, y, 'heart', 3);
       burst(x, y, 'spark', 4);
       say(pick(PET_PHRASES));
+      bark();
       addMood(5);
     },
     [burst, play, say, flight],
@@ -120,6 +122,7 @@ export default function App() {
       window.setTimeout(() => burst(p.x - 20, p.y - 40, 'heart', 4), 350);
     }
     say(pick(EAT_PHRASES));
+    bark(2);
     addMood(15);
   }, [burst, play, say]);
 
