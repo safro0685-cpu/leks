@@ -1,6 +1,10 @@
-// «Гав!» — синтезируется прямо в браузере (Web Audio), без звуковых файлов.
+// «Гав!» — настоящий лай из public/assets/bark.mp3
+
+const URL = `${import.meta.env.BASE_URL}assets/bark.mp3`;
 
 let ctx: AudioContext | null = null;
+let buffer: AudioBuffer | null = null;
+let loading: Promise<void> | null = null;
 let last = 0;
 
 function audio() {
@@ -13,41 +17,30 @@ function audio() {
   return ctx;
 }
 
-function woof(ac: AudioContext, t: number, pitch: number) {
-  const out = ac.createGain();
-  out.gain.setValueAtTime(0.0001, t);
-  out.gain.exponentialRampToValueAtTime(0.5, t + 0.012);
-  out.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
-  out.connect(ac.destination);
+function load(ac: AudioContext) {
+  if (!loading) {
+    loading = fetch(URL)
+      .then((r) => r.arrayBuffer())
+      .then((data) => ac.decodeAudioData(data))
+      .then((b) => {
+        buffer = b;
+      })
+      .catch(() => {
+        loading = null;
+      });
+  }
+  return loading;
+}
 
-  const filter = ac.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.setValueAtTime(1100 * pitch, t);
-  filter.frequency.exponentialRampToValueAtTime(600 * pitch, t + 0.18);
-  filter.Q.value = 1.4;
-  filter.connect(out);
-
-  // голос
-  const osc = ac.createOscillator();
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(330 * pitch, t);
-  osc.frequency.linearRampToValueAtTime(520 * pitch, t + 0.03);
-  osc.frequency.exponentialRampToValueAtTime(190 * pitch, t + 0.19);
-  osc.connect(filter);
-  osc.start(t);
-  osc.stop(t + 0.22);
-
-  // хрипотца
-  const len = Math.floor(ac.sampleRate * 0.2);
-  const buf = ac.createBuffer(1, len, ac.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-  const noise = ac.createBufferSource();
-  noise.buffer = buf;
-  const ng = ac.createGain();
-  ng.gain.value = 0.35;
-  noise.connect(ng).connect(filter);
-  noise.start(t);
+function play(ac: AudioContext, at: number, rate: number) {
+  if (!buffer) return;
+  const src = ac.createBufferSource();
+  src.buffer = buffer;
+  src.playbackRate.value = rate;
+  const g = ac.createGain();
+  g.gain.value = 0.8;
+  src.connect(g).connect(ac.destination);
+  src.start(at);
 }
 
 /** Лекс гавкает. times — сколько раз подряд (1 или 2). */
@@ -57,7 +50,21 @@ export function bark(times = 1) {
   last = now;
   const ac = audio();
   if (!ac) return;
-  const t = ac.currentTime + 0.01;
-  const pitch = 0.92 + Math.random() * 0.16;
-  for (let i = 0; i < times; i++) woof(ac, t + i * 0.24, pitch * (i ? 0.95 : 1));
+  const go = () => {
+    const t = ac.currentTime + 0.01;
+    const rate = 0.95 + Math.random() * 0.1; // чуть разный голос каждый раз
+    for (let i = 0; i < times; i++) play(ac, t + i * 0.36, rate * (i ? 0.97 : 1));
+  };
+  if (buffer) go();
+  else void load(ac).then(go);
 }
+
+// Подгружаем звук заранее, при первом касании страницы
+window.addEventListener(
+  'pointerdown',
+  () => {
+    const ac = audio();
+    if (ac) void load(ac);
+  },
+  { once: true },
+);
